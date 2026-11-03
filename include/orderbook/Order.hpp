@@ -20,7 +20,6 @@ class Order {
             remainingQuantity_{ quantity }
         { }
 
-    private:
         OrderId GetOrderId() const {
             return orderId_;
         }
@@ -57,7 +56,11 @@ class Order {
             remainingQuantity_ -= quantity;
         } 
 
-    public:
+        bool IsFilled() const {
+            return GetRemainingQuantity() == 0;
+        }
+
+    private:
         Side side_;
         Price price_;
         OrderId orderId_;
