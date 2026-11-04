@@ -7,9 +7,9 @@
 
 #include <memory>
 
-class ModifyOder {
+class OrderModify {
     public:
-        ModifyOder(OrderId orderId, Price price, Quantity quantity, Side side):
+        OrderModify(OrderId orderId, Price price, Quantity quantity, Side side):
             orderId_{ orderId },
             price_{ price },
             quantity_{ quantity },

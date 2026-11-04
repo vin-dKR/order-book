@@ -24,7 +24,7 @@ class Order {
             return orderId_;
         }
 
-        Side GetOderSide() const {
+        Side GetOrderSide() const {
             return side_;
         }
 
@@ -59,6 +59,7 @@ class Order {
         bool IsFilled() const {
             return GetRemainingQuantity() == 0;
         }
+
 
     private:
         Side side_;

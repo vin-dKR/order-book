@@ -2,8 +2,16 @@
 
 #include "Order.hpp"
 #include "Types.hpp"
+#include "LevelsType.hpp"
+#include "OrderType.hpp"
+#include "ModifyOrder.hpp"
+#include "SideType.hpp"
+#include "TradeAndTypes.hpp"
+#include "TradeAndTypes.hpp"
+#include "OrderBookLevelInfos.hpp"
 
 #include <map>
+#include <numeric>
 #include <unordered_map>
 
  class Orderbook {
@@ -25,7 +33,7 @@
 
                  const auto& [bestAsk, _] = *asks_.begin();
 
-                 return price >= bestPrice;
+                 return price >= bestAsk;
              } else {
                  if (bids_.empty()) {
                      return false;
@@ -38,13 +46,13 @@
 
          Trades MatchTrades() {
              Trades trades;
-             trades.reverse(orders_.size());
+             trades.reserve(orders_.size());
 
              while (true) {
                  if (bids_.empty() || asks_.empty())
                      break;
 
-                 auto& [askPrice, asks] = *asks.begin();
+                 auto& [askPrice, asks] = *asks_.begin();
                  auto& [bidPrice, bids] = *bids_.begin();
 
                  if (bidPrice > askPrice)
@@ -60,32 +68,32 @@
                      ask -> Fill(quantity);
 
                      if (bid -> IsFilled()) {
-                         bids.pop_fornt();
-                         orders_.earase(bid -> GetOrderId());
+                         bids.pop_front();
+                         orders_.erase(bid -> GetOrderId());
                      } 
 
-                     if (ask -> IsFilled) {
-                         asks.pop_fornt();
-                         orders_.earase(ask -> GetOrderId());
+                     if (ask -> IsFilled()) {
+                         asks.pop_front();
+                         orders_.erase(ask -> GetOrderId());
                      }
 
                      if(bids.empty()) {
-                         bids_.earase(bidPrice);
+                         bids_.erase(bidPrice);
                      }
 
                      if (asks.empty()) {
-                         asks_.earase(askPrice);
+                         asks_.erase(askPrice);
                      }
 
                      trades.push_back(Trade{
                              TradeInfo{bid -> GetOrderId(), bid -> GetPrice(), quantity},
                              TradeInfo{ask -> GetOrderId(), ask -> GetPrice(), quantity}
-                             })
+                         });
                  }
              }
 
-             if (!_bids.empty()){
-                 auto& [_, bids] = *_bids.begin();
+             if (!bids_.empty()){
+                 auto& [_, bids] = *bids_.begin();
                  auto& order = bids.front();
 
                  if (order -> GetOrderType() == OrderType::FillAndKill) {
@@ -93,7 +101,7 @@
                  }
              }
 
-             if (!_asks.empty) {
+             if (!asks_.empty()) {
                  auto& [_, asks] = *asks_.begin();
                  auto& order = asks.front();
 
@@ -104,25 +112,26 @@
 
              return trades;
          }
+
      public:
-         Trade AddOrders(OrderPointer order) {
+         Trades AddOrders(OrderPointer order) {
              if (orders_.contains(order -> GetOrderId())) {
                  return { };
              }
 
-             if (order -> GetOrderType() == OrderType::FillAndKill && CanMathch(order -> OrderId(), order -> GetPrice())) {
+             if (order -> GetOrderType() == OrderType::FillAndKill && CanMathch(order -> GetOrderSide(), order -> GetPrice())) {
                  return { };
              }
 
              OrderPointers::iterator iterator;
 
-             if (order -> GetSide() == Side::Buy) {
+             if (order -> GetOrderSide() == Side::Buy) {
                  auto& orders = bids_[order -> GetPrice()];
                  orders.push_back(order);
                  iterator = std::next(orders.begin(), orders.size() - 1);
              } else {
                  auto& orders = asks_[order -> GetPrice()];
-                 orders.push_back(orders);
+                 orders.push_back(order);
                  iterator = std::next(orders.begin(), orders.size() - 1);
              }
 
@@ -136,16 +145,16 @@
                 return;
             }
 
-            const auto& [order, iterator] = orders_.at(orderId);
-            orders_.earase(orderId);
+            const auto [order, iterator] = orders_.at(orderId);
+            orders_.erase(orderId);
 
-            if (order -> GetSide() == Side::Sell) {
+            if (order -> GetOrderSide() == Side::Sell) {
                 auto price = order -> GetPrice();
                 auto& orders = asks_.at(price);
-                orders.earase(iterator);
+                orders.erase(iterator);
                 
                 if (orders.empty()) {
-                    ask_.erase(price);
+                    asks_.erase(price);
                 }
             } else {
                 auto price = order -> GetPrice();
@@ -153,13 +162,14 @@
                 orders.erase(iterator);
 
                 if (orders.empty()) {
-                    bids.earase(price);
+                    bids_.erase(price);
                 }
             }
         } 
 
+        // WIP OrderModify is not defined anywhere 
         Trades MatchOrders(OrderModify order) {
-            if (!orders_.contains(order.GerOrderId())) {
+            if (!orders_.contains(order.GetOrderId())) {
                 return { };
             }
 
@@ -167,5 +177,36 @@
             CancelOrder(order.GetOrderId());
 
             return AddOrders(order.ToOrderPointer(existingOrder -> GetOrderType()));
+        }
+
+        OrderBookLevelInfos GetOrderInfos() const {
+            LevelInfos bidInfos, askInfos;
+            bidInfos.reserve(bids_.size());
+            askInfos.reserve(asks_.size());
+
+            auto CreateLevelInfos = [](Price price, const OrderPointers& orders) {
+                return LevelInfo{ price, std::accumulate(
+                        orders.begin(), 
+                        orders.end(), 
+                        (Quantity)0, 
+                        [](Quantity runningSum, const OrderPointer& order){ 
+                            return runningSum + order -> GetRemainingQuantity();
+                        }
+                    )
+                };
+            };
+
+            for (const auto& [price, orders]: bids_)
+                bidInfos.push_back(CreateLevelInfos(price, orders));
+
+            for (const auto& [price, orders]: asks_)
+                askInfos.push_back(CreateLevelInfos(price, orders));
+
+            return OrderBookLevelInfos{ bidInfos, askInfos };
+        }
+
+    public:
+        std::size_t Size() const {
+            return orders_.size();
         }
  };
